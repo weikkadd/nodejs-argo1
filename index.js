@@ -13,6 +13,7 @@ const path = require("path");
 require('dotenv').config();
 const { exec, execSync } = require('child_process');
 const { promisify } = require('util');
+const net = require('net');
 const execPromise = promisify(exec);
 
 // ================== 环境变量 ==================
@@ -165,7 +166,7 @@ function generateConfig() {
     tag: 'vmess-ws-in',
     type: 'vmess',
     listen: '::',
-    listen_port: parseInt(PORT),
+    listen_port: parseInt(PORT) + 1,
     users: [{ uuid: UUID }],
     transport: { type: 'ws', path: '/vmess-ws', early_data_header_name: 'Sec-WebSocket-Protocol' }
   });
@@ -241,10 +242,20 @@ async function generateLinks() {
   let subTxt = '';
 
   // VMess (直接用 IP + PORT)
+  let LINK_HOST = SERVER_IP;
+  let LINK_PORT = PORT;
+  let LINK_TLS = "";
+  let LINK_SNI = "";
+  if (PROJECT_URL) {
+    try {
+      const domain = new URL(PROJECT_URL).hostname;
+      if (domain) { LINK_HOST = domain; LINK_PORT = 443; LINK_TLS = "tls"; LINK_SNI = domain; }
+    } catch (e) {}
+  }
   const vmessNode = `vmess://${Buffer.from(JSON.stringify({
-    v: '2', ps: nodeName, add: SERVER_IP, port: PORT, id: UUID, aid: '0',
-    scy: 'auto', net: 'ws', type: 'none', host: SERVER_IP, path: '/vmess-ws?ed=2560',
-    tls: '', sni: '', alpn: '', fp: 'firefox'
+    v: '2', ps: nodeName, add: LINK_HOST, port: LINK_PORT, id: UUID, aid: '0',
+    scy: 'auto', net: 'ws', type: 'none', host: LINK_HOST, path: '/vmess-ws?ed=2560',
+    tls: LINK_TLS, sni: LINK_SNI, alpn: '', fp: 'firefox'
   })).toString('base64')}`;
   subTxt = vmessNode;
 
@@ -362,4 +373,18 @@ app.get('/', (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`HTTP server on port ${PORT}`));
+const httpServer = app.listen(PORT, () => console.log(`HTTP server on port ${PORT}`));
+httpServer.on('upgrade', (req, socket, head) => {
+  if (!req.url || !req.url.startsWith('/vmess-ws')) { socket.destroy(); return; }
+  const target = net.connect(parseInt(PORT) + 1, '127.0.0.1', () => {
+    let raw = `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`;
+    for (const key of Object.keys(req.headers)) { raw += `${key}: ${req.headers[key]}\r\n`; }
+    raw += '\r\n';
+    target.write(raw);
+    if (head && head.length) target.write(head);
+    socket.pipe(target);
+    target.pipe(socket);
+  });
+  target.on('error', () => { try { socket.destroy(); } catch (e) {} });
+  socket.on('error', () => { try { target.destroy(); } catch (e) {} });
+});
