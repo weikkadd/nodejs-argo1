@@ -329,6 +329,8 @@ async function autoAccess() {
 // ================== 主流程 ==================
 async function start() {
   console.log('=== nodejs-argo 轻量版启动 ===');
+  console.log('VERSION: v1-probe');
+  console.log(`env check: PROJECT_URL=${process.env.PROJECT_URL ? 'set' : 'unset'} NEZHA_SERVER=${process.env.NEZHA_SERVER ? 'set' : 'unset'} NEZHA_KEY=${process.env.NEZHA_KEY ? 'set' : 'unset'} NEZHA_PORT=${process.env.NEZHA_PORT ? 'set' : 'unset'}`);
 
   // 1. 下载 sing-box
   const arch = getSystemArchitecture();
