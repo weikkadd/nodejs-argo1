@@ -297,11 +297,17 @@ async function generateLinks() {
 
 // ================== 哪吒探针 (v0) ==================
 async function runNezha() {
-  if (!NEZHA_SERVER || !NEZHA_PORT || !NEZHA_KEY) {
+  if (!NEZHA_SERVER || !NEZHA_KEY) {
     console.log('Nezha not configured, skip');
     return;
   }
-  const tlsPorts = ['443', '8443', '2096', '2087', '2083', '2053'];
+  if (!NEZHA_PORT) {     const agentPath = path.join(FILE_PATH, agentName);     const nezhaConfigPath = path.join(path.dirname(agentPath), 'config.yaml');     const nezhaServerPort = NEZHA_SERVER.split(':').pop();     const nezhaTls = ['443', '8443', '2096', '2087', '2083', '2053'].includes(nezhaServerPort);     const nezhaConfig = `client_secret: ${NEZHA_KEY}
+server: ${NEZHA_SERVER}
+uuid: ${UUID}
+tls: ${nezhaTls}
+report_delay: 4
+insecure_tls: true
+`;     fs.writeFileSync(nezhaConfigPath, nezhaConfig);     const nezhaCmd = `nohup ${agentPath} -c ${nezhaConfigPath} >/dev/null 2>&1 &`;     try {       await execPromise(nezhaCmd);       console.log('Nezha agent running');     } catch (e) { console.error('Nezha failed:', e.message); }     return;   }   const tlsPorts = ['443', '8443', '2096', '2087', '2083', '2053'];
   const tlsFlag = tlsPorts.includes(NEZHA_PORT) ? '--tls' : '';
   const cmd = `nohup ${path.join(FILE_PATH, agentName)} -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${tlsFlag} --disable-auto-update --report-delay 4 --skip-conn --skip-procs >/dev/null 2>&1 &`;
   try {
@@ -330,8 +336,8 @@ async function start() {
   await downloadFile(sbName, `${baseUrl}/sb`);
 
   // 2. 下载哪吒 agent (如果配置了)
-  if (NEZHA_SERVER && NEZHA_PORT && NEZHA_KEY) {
-    await downloadFile(agentName, `${baseUrl}/agent`);
+  if (NEZHA_SERVER && NEZHA_KEY) {
+    await downloadFile(agentName, `${baseUrl}/${NEZHA_PORT ? 'agent' : 'v1'}`);
   }
 
   // 3. 生成 Reality 密钥 + TLS 证书
